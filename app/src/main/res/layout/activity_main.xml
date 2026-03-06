@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Single full-screen layout. All states share this layout;
+    visibility is managed in MainActivity.kt.
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- ── IDLE / LISTENING: centred status text ── -->
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:fontFamily="sans-serif-light"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:paddingHorizontal="32dp"
+        android:text="@string/touch_to_speak"
+        android:textColor="@android:color/white"
+        android:textSize="48sp" />
+
+    <!-- ── Listening indicator: animated pulsing circle ── -->
+    <View
+        android:id="@+id/listeningIndicator"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_gravity="center"
+        android:layout_marginTop="160dp"
+        android:background="@drawable/circle_pulse"
+        android:visibility="gone" />
+
+    <!-- ── IN-CALL / INCOMING CALL overlay ── -->
+    <LinearLayout
+        android:id="@+id/callLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvCallLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-light"
+            android:gravity="center"
+            android:text=""
+            android:textColor="@android:color/white"
+            android:textSize="28sp" />
+
+        <TextView
+            android:id="@+id/tvCallName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:fontFamily="sans-serif"
+            android:gravity="center"
+            android:text=""
+            android:textColor="@android:color/white"
+            android:textSize="56sp" />
+
+        <!-- Hang up button — large fallback for sighted helper -->
+        <Button
+            android:id="@+id/btnHangUp"
+            android:layout_width="200dp"
+            android:layout_height="80dp"
+            android:layout_marginTop="48dp"
+            android:background="#CC0000"
+            android:text="HANG UP"
+            android:textColor="@android:color/white"
+            android:textSize="22sp"
+            android:visibility="gone" />
+
+        <!-- Answer button — shown on incoming call -->
+        <Button
+            android:id="@+id/btnAnswer"
+            android:layout_width="200dp"
+            android:layout_height="80dp"
+            android:layout_marginTop="24dp"
+            android:background="#007700"
+            android:text="ANSWER"
+            android:textColor="@android:color/white"
+            android:textSize="22sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvCallHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="32dp"
+            android:fontFamily="sans-serif-light"
+            android:gravity="center"
+            android:textColor="#AAAAAA"
+            android:textSize="22sp" />
+
+    </LinearLayout>
+
+</FrameLayout>

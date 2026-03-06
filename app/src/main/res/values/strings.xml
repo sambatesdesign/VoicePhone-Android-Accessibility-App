@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VoicePhone</string>
+
+    <!-- ── Idle screen ── -->
+    <string name="touch_to_speak">Touch to speak</string>
+
+    <!-- ── Listening / STT ── -->
+    <string name="listening">Listening…</string>
+    <string name="tts_greeting_first">Hello, how can I help?</string>
+    <string name="tts_greeting">I\'m listening.</string>
+    <string name="tts_timeout">I didn\'t hear anything. Touch the screen to try again.</string>
+    <string name="tts_sorry">Sorry, I didn\'t understand that. Say help to hear what I can do.</string>
+
+    <!-- ── Calling ── -->
+    <string name="tts_calling">Calling %1$s now.</string>
+    <string name="tts_call_connected">Call connected.</string>
+    <string name="tts_call_ended">Call ended.</string>
+    <string name="tts_call_failed">Sorry, the call failed. Please try again.</string>
+    <string name="tts_contact_not_found">I couldn\'t find anyone called %1$s in your contacts.</string>
+    <string name="tts_contact_multiple">I found %1$s. Say their full name to choose one.</string>
+    <string name="tts_dialling_number">Dialling %1$s.</string>
+
+    <!-- ── In-call UI ── -->
+    <string name="in_call_hint">Say hang up to end the call.</string>
+    <string name="tts_in_call_options">Say hang up to end the call.</string>
+
+    <!-- ── Incoming call ── -->
+    <string name="tts_incoming_call">Incoming call from %1$s. Say answer or ignore.</string>
+    <string name="tts_call_answered">Answering call.</string>
+    <string name="tts_call_rejected">Call ignored.</string>
+
+    <!-- ── SMS ── -->
+    <string name="tts_no_unread_messages">You have no unread messages.</string>
+    <string name="tts_unread_messages">You have %1$d unread messages.</string>
+    <string name="tts_message_from">Message from %1$s. %2$s</string>
+    <string name="tts_message_sent">Message sent.</string>
+    <string name="tts_message_send_failed">Sorry, the message could not be sent.</string>
+    <string name="tts_say_your_message">What would you like to say? Speak after the tone.</string>
+    <string name="tts_sending_message">Sending your message to %1$s.</string>
+
+    <!-- ── Time / Date ── -->
+    <string name="tts_time">The time is %1$s.</string>
+    <string name="tts_date">Today is %1$s.</string>
+
+    <!-- ── Missed calls ── -->
+    <string name="tts_no_missed_calls">You have no missed calls.</string>
+    <string name="tts_missed_calls">You have %1$d missed call from %2$s.</string>
+    <string name="tts_missed_calls_plural">You have %1$d missed calls. The most recent was from %2$s.</string>
+
+    <!-- ── Help ── -->
+    <string name="tts_help">Here\'s what I can do. Say call followed by a name to make a phone call.
+        Say hang up to end a call.
+        Say answer to answer an incoming call.
+        Say read my messages to hear your texts.
+        Say what time is it or what\'s the date for the time and date.
+        Say who called me to hear missed calls.</string>
+
+    <!-- ── Setup / permissions ── -->
+    <string name="tts_welcome">Welcome to VoicePhone. I need a few permissions to work properly.</string>
+    <string name="tts_permission_phone">I need permission to make phone calls on your behalf.</string>
+    <string name="tts_permission_contacts">I need permission to read your contacts so I can call people by name.</string>
+    <string name="tts_permission_sms">I need permission to read and send text messages for you.</string>
+    <string name="tts_permission_audio">I need permission to use the microphone to hear your voice.</string>
+    <string name="tts_permission_call_log">I need permission to read your call history.</string>
+    <string name="tts_setup_launcher">Please set VoicePhone as your default home screen. I\'ll take you to the settings now.</string>
+    <string name="tts_setup_phone_app">Please set VoicePhone as your default phone app. I\'ll take you to the settings now.</string>
+    <string name="tts_setup_battery">Please allow VoicePhone to run in the background so I\'m always ready for you.</string>
+    <string name="tts_setup_complete">You\'re all set. Touch the screen at any time and tell me what you\'d like to do.</string>
+
+    <!-- ── Notification channel ── -->
+    <string name="notification_channel_name">VoicePhone Service</string>
+    <string name="notification_channel_description">Keeps VoicePhone running in the background</string>
+    <string name="notification_title">VoicePhone is running</string>
+    <string name="notification_text">Touch the screen to speak</string>
+
+    <!-- ── Processing ── -->
+    <string name="processing">Processing…</string>
+
+    <!-- ── Call screen labels ── -->
+    <string name="calling_label">Calling</string>
+    <string name="in_call_label">In call with</string>
+    <string name="incoming_call_label">Incoming call from</string>
+    <string name="incoming_call_hint">Say answer or ignore</string>
+</resources>

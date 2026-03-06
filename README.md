@@ -1,2 +1,94 @@
-# VoicePhone-Android-Accessibility-App
-VoicePhone — Android Accessibility App
+# VoicePhone — Android Accessibility App
+
+A voice-first Android phone app designed for blind and visually impaired users. VoicePhone replaces the standard home screen and dialler with a single black screen — touch anywhere to speak, and the app handles everything by voice.
+
+---
+
+## What it does
+
+- **Make calls** — say "Call Mum" and it finds the contact and dials
+- **Answer calls** — announces who's calling, say "answer" or "ignore"
+- **Hang up** — say "hang up" to end any call
+- **Read messages** — say "read my messages" to hear unread texts
+- **Send messages** — say "send a message to John" and speak the text
+- **Time & date** — say "what time is it" or "what's the date"
+- **Missed calls** — say "who called me"
+- **Always ready** — runs as a foreground service, restarts on reboot
+
+---
+
+## Architecture
+
+```
+app/src/main/java/com/voicephone/
+├── MainActivity.kt           # Pure view layer — state machine renderer
+├── VoiceService.kt           # Foreground service engine, owns all state
+├── SpeechHandler.kt          # STT + keyword intent parser (Phase 3 LLM seam)
+├── TtsManager.kt             # TextToSpeech wrapper (0.85× rate for clarity)
+├── ContactsHelper.kt         # ContactsContract lookup + fuzzy name matching
+├── CallManager.kt            # ConnectionService implementation
+├── InCallHandler.kt          # InCallService — routes call events to VoiceService
+├── SmsHelper.kt              # Unread SMS reading + sending
+├── IncomingCallReceiver.kt   # Wakes service on incoming call
+├── SmsReceiver.kt            # Wakes service on incoming SMS
+├── BootReceiver.kt           # Restarts service after device reboot
+└── PermissionSetupActivity.kt # First-launch TTS-guided permission flow
+```
+
+**State machine:**
+```
+IDLE → (touch) → LISTENING → (speech recognised) → PROCESSING
+     → DIALLING / IN_CALL / INCOMING_CALL / IDLE
+```
+
+---
+
+## Requirements
+
+- Android API 26+ (Android 8.0 Oreo)
+- Target API 34
+- Kotlin 1.9 / AGP 8.2
+
+---
+
+## Build
+
+1. Clone the repo and open in **Android Studio Hedgehog** or later
+2. Connect a physical device (API 26+) — speech recognition requires Google Play Services
+3. Run `app` configuration
+
+On first launch, the app walks through all required permissions via TTS. You will also be prompted to set VoicePhone as the **default home screen** and **default phone app** — both are required for full functionality.
+
+---
+
+## Permissions required
+
+| Permission | Purpose |
+|---|---|
+| `CALL_PHONE` | Place outgoing calls |
+| `ANSWER_PHONE_CALLS` | Answer/reject incoming calls |
+| `READ_CONTACTS` | Look up contacts by name |
+| `READ_CALL_LOG` | Report missed calls |
+| `READ_SMS` / `SEND_SMS` / `RECEIVE_SMS` | Read and send text messages |
+| `RECORD_AUDIO` | Microphone for speech recognition |
+| `FOREGROUND_SERVICE` | Keep service alive in background |
+| `RECEIVE_BOOT_COMPLETED` | Restart after reboot |
+
+---
+
+## Phase roadmap
+
+| Phase | Status | Description |
+|---|---|---|
+| **1 — MVP** | ✅ Done | Voice calls, SMS read, time/date, incoming call handling |
+| **2 — Disambiguation** | Planned | Multiple contact matches, SMS compose confirmation |
+| **3 — LLM integration** | Planned | Replace `SpeechHandler.parseIntent()` with Claude API for natural language |
+| **4 — Family setup app** | Planned | Companion app for carers to manage contacts + preferences |
+
+**Phase 3 seam:** `SpeechHandler.parseIntent()` is the single isolated swap point for Claude API. The offline keyword matcher is the fallback when no network is available — the rest of the call/TTS/SMS stack is unchanged.
+
+---
+
+## Project spec
+
+See [`voicephone-app-spec.md`](voicephone-app-spec.md) for the full product specification.
