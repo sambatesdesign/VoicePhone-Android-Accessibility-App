@@ -13,6 +13,15 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+
+        def props = new Properties()
+        def localPropsFile = rootProject.file("local.properties")
+        if (localPropsFile.exists()) props.load(localPropsFile.newDataInputStream())
+        buildConfigField "String", "DEEPGRAM_API_KEY", "\"${props.getProperty('DEEPGRAM_API_KEY', '')}\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {
@@ -35,4 +44,5 @@ android {
 dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }

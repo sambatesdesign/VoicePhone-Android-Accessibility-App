@@ -64,6 +64,20 @@ IDLE → (touch) → LISTENING → (speech recognised) → PROCESSING
 
 On first launch, the app walks through all required permissions via TTS. You will also be prompted to set VoicePhone as the **default home screen** and **default phone app** — both are required for full functionality.
 
+### Optional: Cloud TTS (Deepgram)
+
+The app defaults to Android's on-device TTS. To enable the higher-quality Deepgram neural voice:
+
+1. Create a free account at [deepgram.com](https://deepgram.com) and get an API key
+2. Add the key to `local.properties` (this file is gitignored and never committed):
+   ```
+   DEEPGRAM_API_KEY=your_key_here
+   ```
+3. Rebuild and deploy the app
+4. On the device, say **"use cloud voice"** to switch to Deepgram, or **"use local voice"** to switch back
+
+The voice used is `aura-2-thalia-en` — change `DEEPGRAM_VOICE` in `TtsManager.kt` to use a different voice. The app falls back to Android TTS automatically if the network is unavailable or the API call fails.
+
 ---
 
 ## Permissions required

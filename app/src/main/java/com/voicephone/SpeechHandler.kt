@@ -184,6 +184,10 @@ class SpeechHandler(
             // ── Open settings (carer use) ──
             text.contains("settings") || text.contains("open settings") -> VoiceIntent.OpenSettings
 
+            // ── TTS voice toggle ──
+            text.contains("cloud voice") || text.contains("use cloud") -> VoiceIntent.EnableCloudTts
+            text.contains("local voice") || text.contains("use local") || text.contains("turn off cloud") -> VoiceIntent.DisableCloudTts
+
             else -> VoiceIntent.Unknown(raw)
         }
     }
@@ -236,6 +240,8 @@ sealed class VoiceIntent {
     object Help : VoiceIntent()
     object OpenContacts : VoiceIntent()
     object OpenSettings : VoiceIntent()
+    object EnableCloudTts : VoiceIntent()
+    object DisableCloudTts : VoiceIntent()
     object Timeout : VoiceIntent()
     data class Unknown(val raw: String) : VoiceIntent()
 }

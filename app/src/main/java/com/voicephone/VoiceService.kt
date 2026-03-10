@@ -266,6 +266,16 @@ class VoiceService : Service() {
                 startActivity(i)
                 updateState(AppState.IDLE, "")
             }
+            is VoiceIntent.EnableCloudTts -> {
+                tts.useCloudTts = true
+                tts.speak("Cloud voice is now on.")
+                updateState(AppState.IDLE, "")
+            }
+            is VoiceIntent.DisableCloudTts -> {
+                tts.useCloudTts = false
+                tts.speak("Switched back to local voice.")
+                updateState(AppState.IDLE, "")
+            }
             is VoiceIntent.Timeout -> {
                 when (appState) {
                     AppState.INCOMING_CALL -> announceIncomingCall(lastIncomingCaller)
