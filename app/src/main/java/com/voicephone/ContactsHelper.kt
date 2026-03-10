@@ -72,6 +72,17 @@ class ContactsHelper(private val context: Context) {
     /** Returns the single best contact for [query], or null if none found. */
     fun findBestContact(query: String): Contact? = findContacts(query).firstOrNull()
 
+    /** Look up a contact by phone number. Strips formatting and normalises to last 9 digits. */
+    fun findByNumber(number: String): Contact? {
+        val stripped = number.replace(Regex("[\\s\\-+()]"), "")
+        val normalised = stripped.takeLast(9)
+        return cachedContacts.firstOrNull { contact ->
+            val contactStripped = contact.number.replace(Regex("[\\s\\-+()]"), "")
+            val contactNormalised = contactStripped.takeLast(9)
+            contactNormalised == normalised
+        }
+    }
+
     /** True if [input] looks like a dialable phone number (digits, +, spaces, dashes). */
     fun isPhoneNumber(input: String): Boolean =
         input.replace(Regex("[\\s\\-+()]"), "").all { it.isDigit() } &&

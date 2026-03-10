@@ -5,6 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.media.ToneGenerator
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import android.content.Intent
 import android.net.Uri
 import android.os.IBinder
@@ -53,15 +59,22 @@ class VoiceService : Service() {
     private lateinit var smsHelper: SmsHelper
 
     // ── State ────────────────────────────────────────────────────────────────
-    private var appState: AppState = AppState.IDLE
+    var currentAppState: AppState = AppState.IDLE
+        private set
+    private var appState: AppState
+        get() = currentAppState
+        set(value) { currentAppState = value }
     private var pendingSmsSender: String = ""
     private var pendingSmsBody: String = ""
     private var lastIncomingCaller: String = ""
+    private var pendingSmsContact: Contact? = null
+    private var pendingSmsOutbodyDraft: String = ""
 
     /** Activity registers here to receive state updates for the UI. */
     var stateListener: ((AppState, String) -> Unit)? = null
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var ringtonePlayer: MediaPlayer? = null
 
     // ─────────────────────────────────────────────────────────────────────────
     // Lifecycle
@@ -84,7 +97,15 @@ class VoiceService : Service() {
         speech = SpeechHandler(
             context = this,
             onIntent = ::handleIntent,
-            onListeningStarted = { updateState(AppState.LISTENING, "") },
+            onListeningStarted = {
+                if (appState != AppState.INCOMING_CALL &&
+                    appState != AppState.IN_CALL &&
+                    appState != AppState.COMPOSING_SMS &&
+                    appState != AppState.CONFIRMING_SMS) {
+                    updateState(AppState.LISTENING, "")
+                }
+                playListeningBeep()
+            },
             onListeningEnded = { /* state will change via onIntent */ },
             onError = { msg ->
                 Log.e(TAG, "STT error: $msg")
@@ -119,6 +140,7 @@ class VoiceService : Service() {
         super.onDestroy()
         speech.destroy()
         tts.shutdown()
+        stopRinging()
         wakeLock?.release()
         instance = null
         Log.d(TAG, "VoiceService destroyed — will restart via START_STICKY")
@@ -129,20 +151,30 @@ class VoiceService : Service() {
     // ─────────────────────────────────────────────────────────────────────────
 
     fun startListening() {
+        // Second tap while listening or greeting TTS = cancel
+        if (speech.isListening || appState == AppState.LISTENING) {
+            speech.stopListening()
+            tts.cancelAll()
+            updateState(AppState.IDLE, "")
+            return
+        }
+        if (tts.isSpeaking) return
+
         if (appState == AppState.IN_CALL) {
-            // In-call: just remind the user of options
-            tts.speak(getString(R.string.tts_in_call_options))
+            tts.speak(getString(R.string.tts_in_call_options)) {
+                speech.startListening()
+            }
             return
         }
         if (appState == AppState.INCOMING_CALL) {
-            tts.speak(getString(R.string.tts_incoming_call, lastIncomingCaller))
+            tts.speak(getString(R.string.tts_incoming_call, lastIncomingCaller)) {
+                speech.startListening()
+            }
             return
         }
-        if (speech.isListening || tts.isSpeaking) return
 
         updateState(AppState.LISTENING, "")
-        val greeting = if (appState == AppState.IDLE) getString(R.string.tts_greeting) else getString(R.string.tts_greeting)
-        tts.speak(greeting) {
+        tts.speak(getString(R.string.tts_greeting)) {
             speech.startListening()
         }
     }
@@ -153,6 +185,59 @@ class VoiceService : Service() {
 
     private fun handleIntent(intent: VoiceIntent) {
         Log.d(TAG, "handleIntent: $intent")
+        // If composing an SMS, treat speech as the draft message body then confirm
+        if (appState == AppState.COMPOSING_SMS) {
+            val body = when (intent) {
+                is VoiceIntent.Timeout -> {
+                    // Re-prompt
+                    tts.speak(getString(R.string.tts_say_your_message)) { speech.startListening() }
+                    return
+                }
+                is VoiceIntent.Unknown -> intent.raw
+                else -> (intent as? VoiceIntent.Unknown)?.raw ?: intent.javaClass.simpleName
+            }
+            val contact = pendingSmsContact ?: run {
+                updateState(AppState.IDLE, ""); return
+            }
+            speech.rawMode = false  // confirmation phase uses normal parsing (yes/no)
+            pendingSmsOutbodyDraft = body
+            updateState(AppState.CONFIRMING_SMS, contact.name)
+            tts.speak("Your message to ${contact.name} says: $body. Ready to send it?") {
+                speech.startListening()
+            }
+            return
+        }
+
+        // If confirming an SMS, handle yes/no
+        if (appState == AppState.CONFIRMING_SMS) {
+            val contact = pendingSmsContact
+            when (intent) {
+                is VoiceIntent.Answer -> { // "yes"
+                    if (contact != null) {
+                        smsHelper.sendSms(contact.number, pendingSmsOutbodyDraft)
+                        tts.speak(getString(R.string.tts_message_sent))
+                    }
+                    pendingSmsContact = null
+                    pendingSmsOutbodyDraft = ""
+                    updateState(AppState.IDLE, "")
+                }
+                is VoiceIntent.Reject -> { // "no" — re-ask for message
+                    speech.rawMode = true
+                    updateState(AppState.COMPOSING_SMS, contact?.name ?: "")
+                    tts.speak(getString(R.string.tts_say_your_message)) { speech.startListening() }
+                }
+                is VoiceIntent.Timeout -> {
+                    // Re-read the confirmation
+                    tts.speak("Your message to ${contact?.name} says: $pendingSmsOutbodyDraft. Ready to send it?") {
+                        speech.startListening()
+                    }
+                }
+                else -> {
+                    tts.speak("Say yes to send or no to re-record.") { speech.startListening() }
+                }
+            }
+            return
+        }
         when (intent) {
             is VoiceIntent.Call -> handleCallIntent(intent.target)
             is VoiceIntent.Answer -> handleAnswer()
@@ -164,13 +249,37 @@ class VoiceService : Service() {
             is VoiceIntent.Date -> handleDate()
             is VoiceIntent.MissedCalls -> handleMissedCalls()
             is VoiceIntent.Help -> handleHelp()
-            is VoiceIntent.Timeout -> {
-                tts.speak(getString(R.string.tts_timeout))
+            is VoiceIntent.OpenContacts -> {
+                tts.speak("Opening contacts.")
+                val i = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                    type = "vnd.android.cursor.dir/contact"
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(i)
                 updateState(AppState.IDLE, "")
             }
-            is VoiceIntent.Unknown -> {
-                tts.speak(getString(R.string.tts_sorry))
+            is VoiceIntent.OpenSettings -> {
+                tts.speak("Opening settings.")
+                val i = android.content.Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(i)
                 updateState(AppState.IDLE, "")
+            }
+            is VoiceIntent.Timeout -> {
+                when (appState) {
+                    AppState.INCOMING_CALL -> announceIncomingCall(lastIncomingCaller)
+                    AppState.LISTENING -> updateState(AppState.IDLE, "")
+                    else -> updateState(AppState.IDLE, "")
+                }
+            }
+            is VoiceIntent.Unknown -> {
+                if (appState == AppState.INCOMING_CALL) {
+                    announceIncomingCall(lastIncomingCaller)
+                } else {
+                    tts.speak(getString(R.string.tts_sorry))
+                    updateState(AppState.IDLE, "")
+                }
             }
         }
     }
@@ -255,22 +364,30 @@ class VoiceService : Service() {
         Log.d(TAG, "onCallStateChanged: $state ($callerName)")
         when (state) {
             AppCallState.INCOMING -> {
+                // Guard: ignore spurious RINGING broadcasts while already in an active call
+                if (appState == AppState.IN_CALL || appState == AppState.DIALLING) return
                 lastIncomingCaller = callerName
                 updateState(AppState.INCOMING_CALL, callerName)
+                startRinging()
                 announceIncomingCall(callerName)
             }
             AppCallState.DIALLING -> {
                 updateState(AppState.DIALLING, callerName)
+                tts.speak(getString(R.string.tts_calling, callerName))
             }
             AppCallState.IN_CALL -> {
+                stopRinging()
+                playConnectedTone()
                 updateState(AppState.IN_CALL, callerName)
                 tts.speak(getString(R.string.tts_call_connected))
             }
             AppCallState.ENDED -> {
+                stopRinging()
                 tts.speak(getString(R.string.tts_call_ended))
                 updateState(AppState.IDLE, "")
             }
             AppCallState.IDLE -> {
+                stopRinging()
                 updateState(AppState.IDLE, "")
             }
         }
@@ -281,8 +398,62 @@ class VoiceService : Service() {
         updateState(AppState.IDLE, "")
     }
 
+    private fun startRinging() {
+        stopRinging() // ensure any previous player is released before starting a new one
+        try {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            ringtonePlayer = MediaPlayer().apply {
+                setDataSource(applicationContext, uri)
+                setAudioStreamType(AudioManager.STREAM_RING)
+                isLooping = true
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start ringtone: ${e.message}")
+        }
+    }
+
+    private fun stopRinging() {
+        ringtonePlayer?.stop()
+        ringtonePlayer?.release()
+        ringtonePlayer = null
+    }
+
+    // TODO: Review after user testing — beep may not be needed if users find the
+    //       "I'm listening" TTS prompt sufficient on its own. Remove if unwanted.
+    private fun playListeningBeep() {
+        try {
+            val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, ToneGenerator.MAX_VOLUME)
+            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ toneGen.release() }, 300)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to play listening beep: ${e.message}")
+        }
+    }
+
+    private fun playConnectedTone() {
+        try {
+            val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+            toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 400)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ toneGen.release() }, 500)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to play connected tone: ${e.message}")
+        }
+    }
+
+    private fun enableSpeaker() {
+        (getSystemService(AUDIO_SERVICE) as AudioManager).isSpeakerphoneOn = true
+    }
+
+    private fun disableSpeaker() {
+        (getSystemService(AUDIO_SERVICE) as AudioManager).isSpeakerphoneOn = false
+    }
+
     private fun announceIncomingCall(callerName: String) {
-        tts.speak(getString(R.string.tts_incoming_call, callerName))
+        tts.speak(getString(R.string.tts_incoming_call, callerName)) {
+            speech.startListening()
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -293,7 +464,7 @@ class VoiceService : Service() {
         pendingSmsSender = sender
         pendingSmsBody = body
         updateState(AppState.INCOMING_SMS, sender)
-        val friendlyName = contactsHelper.findBestContact(sender)?.name ?: sender
+        val friendlyName = contactsHelper.findByNumber(sender)?.name ?: sender
         tts.speak("You have a message from $friendlyName. Say read it to hear it.") {
             speech.startListening()
         }
@@ -301,7 +472,7 @@ class VoiceService : Service() {
 
     private fun handleReadSms() {
         if (pendingSmsBody.isNotEmpty()) {
-            val friendlyName = contactsHelper.findBestContact(pendingSmsSender)?.name ?: pendingSmsSender
+            val friendlyName = contactsHelper.findByNumber(pendingSmsSender)?.name ?: pendingSmsSender
             tts.speak(getString(R.string.tts_message_from, friendlyName, pendingSmsBody))
             pendingSmsSender = ""
             pendingSmsBody = ""
@@ -315,7 +486,7 @@ class VoiceService : Service() {
             updateState(AppState.IDLE, "")
         } else {
             val text = messages.joinToString(". Next message. ") { msg ->
-                val name = contactsHelper.findBestContact(msg.sender)?.name ?: msg.sender
+                val name = contactsHelper.findByNumber(msg.sender)?.name ?: msg.sender
                 "From $name. ${msg.body}"
             }
             tts.speak(text)
@@ -335,13 +506,12 @@ class VoiceService : Service() {
             updateState(AppState.IDLE, "")
             return
         }
+        pendingSmsContact = contact
+        updateState(AppState.COMPOSING_SMS, contact.name)
+        speech.rawMode = true  // next STT result = raw message body, not a command
         tts.speak(getString(R.string.tts_say_your_message)) {
-            // Listen for the message content
             speech.startListening()
         }
-        // After speech is captured, next intent will be an Unknown/raw utterance
-        // This is handled as a two-step: a simple state flag would extend this in Phase 2
-        // For MVP: the next raw utterance is treated as the message body
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -411,15 +581,17 @@ class VoiceService : Service() {
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            getString(R.string.notification_channel_name),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = getString(R.string.notification_channel_description)
-            setShowBadge(false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                getString(R.string.notification_channel_name),
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = getString(R.string.notification_channel_description)
+                setShowBadge(false)
+            }
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
@@ -429,7 +601,7 @@ class VoiceService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
-        return Notification.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(getString(R.string.notification_text))
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
@@ -453,5 +625,7 @@ enum class AppState {
     IN_CALL,
     DIALLING,
     INCOMING_CALL,
-    INCOMING_SMS
+    INCOMING_SMS,
+    COMPOSING_SMS,
+    CONFIRMING_SMS
 }

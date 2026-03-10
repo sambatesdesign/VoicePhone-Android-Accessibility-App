@@ -3,6 +3,7 @@ package com.voicephone
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Telephony
 import android.util.Log
 
@@ -33,7 +34,11 @@ class SmsReceiver : BroadcastReceiver() {
                 putExtra(VoiceService.EXTRA_SMS_SENDER, address)
                 putExtra(VoiceService.EXTRA_SMS_BODY, body)
             }
-            context.startForegroundService(serviceIntent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
         }
     }
 }

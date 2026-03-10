@@ -3,6 +3,7 @@ package com.voicephone
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.telephony.TelephonyManager
 import android.util.Log
 
@@ -41,7 +42,11 @@ class IncomingCallReceiver : BroadcastReceiver() {
                     action = VoiceService.ACTION_INCOMING_CALL
                     putExtra(VoiceService.EXTRA_CALLER_NAME, name)
                 }
-                context.startForegroundService(serviceIntent)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
             }
             TelephonyManager.EXTRA_STATE_IDLE -> {
                 // Call ended / rejected — VoiceService will also hear this via InCallHandler

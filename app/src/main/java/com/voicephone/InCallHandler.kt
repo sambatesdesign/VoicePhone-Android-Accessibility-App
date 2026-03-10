@@ -1,6 +1,7 @@
 package com.voicephone
 
 import android.telecom.Call
+import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.util.Log
 
@@ -54,7 +55,7 @@ class InCallHandler : InCallService() {
         // Attempt to look up a friendly name for the number
         val service = VoiceService.instance
         val name = if (service != null && number.isNotEmpty()) {
-            service.contactsHelper.findBestContact(number)?.name ?: number
+            service.contactsHelper.findByNumber(number)?.name ?: number
         } else {
             number
         }
@@ -66,10 +67,12 @@ class InCallHandler : InCallService() {
             }
             Call.STATE_DIALING, Call.STATE_CONNECTING -> {
                 Log.d(TAG, "STATE_DIALING to $name")
+                setAudioRoute(CallAudioState.ROUTE_SPEAKER)
                 VoiceService.instance?.onCallStateChanged(AppCallState.DIALLING, name)
             }
             Call.STATE_ACTIVE -> {
                 Log.d(TAG, "STATE_ACTIVE with $name")
+                setAudioRoute(CallAudioState.ROUTE_SPEAKER)
                 VoiceService.instance?.onCallStateChanged(AppCallState.IN_CALL, name)
             }
             Call.STATE_DISCONNECTED, Call.STATE_DISCONNECTING -> {

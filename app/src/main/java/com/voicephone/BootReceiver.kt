@@ -3,6 +3,7 @@ package com.voicephone
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 
 /**
@@ -23,6 +24,10 @@ class BootReceiver : BroadcastReceiver() {
         ) return
 
         Log.d(TAG, "Boot completed — starting VoiceService")
-        context.startForegroundService(Intent(context, VoiceService::class.java))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(Intent(context, VoiceService::class.java))
+        } else {
+            context.startService(Intent(context, VoiceService::class.java))
+        }
     }
 }

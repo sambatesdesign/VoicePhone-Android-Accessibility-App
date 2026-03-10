@@ -1,6 +1,8 @@
 package com.voicephone
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -20,6 +22,8 @@ class TtsManager(private val context: Context) {
     companion object {
         private const val TAG = "TtsManager"
     }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private var tts: TextToSpeech? = null
     var isReady = false
@@ -44,8 +48,10 @@ class TtsManager(private val context: Context) {
 
                     override fun onDone(utteranceId: String?) {
                         isSpeaking = false
-                        onDoneCallbacks[utteranceId]?.invoke()
-                        onDoneCallbacks.remove(utteranceId)
+                        mainHandler.post {
+                            onDoneCallbacks[utteranceId]?.invoke()
+                            onDoneCallbacks.remove(utteranceId)
+                        }
                     }
 
                     @Deprecated("Deprecated in Java")
@@ -86,6 +92,13 @@ class TtsManager(private val context: Context) {
     fun stop() {
         tts?.stop()
         isSpeaking = false
+    }
+
+    /** Stop speech and discard all pending onDone callbacks. */
+    fun cancelAll() {
+        tts?.stop()
+        isSpeaking = false
+        onDoneCallbacks.clear()
     }
 
     fun shutdown() {

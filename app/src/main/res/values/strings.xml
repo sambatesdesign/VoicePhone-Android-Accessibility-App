@@ -7,13 +7,11 @@
 
     <!-- ── Listening / STT ── -->
     <string name="listening">Listening…</string>
-    <string name="tts_greeting_first">Hello, how can I help?</string>
     <string name="tts_greeting">I\'m listening.</string>
-    <string name="tts_timeout">I didn\'t hear anything. Touch the screen to try again.</string>
     <string name="tts_sorry">Sorry, I didn\'t understand that. Say help to hear what I can do.</string>
 
     <!-- ── Calling ── -->
-    <string name="tts_calling">Calling %1$s now.</string>
+    <string name="tts_calling">Calling %1$s. Ringing.</string>
     <string name="tts_call_connected">Call connected.</string>
     <string name="tts_call_ended">Call ended.</string>
     <string name="tts_call_failed">Sorry, the call failed. Please try again.</string>
@@ -22,11 +20,11 @@
     <string name="tts_dialling_number">Dialling %1$s.</string>
 
     <!-- ── In-call UI ── -->
-    <string name="in_call_hint">Say hang up to end the call.</string>
-    <string name="tts_in_call_options">Say hang up to end the call.</string>
+    <string name="in_call_hint">Tap anywhere to hang up.</string>
+    <string name="tts_in_call_options">Tap the screen to hang up.</string>
 
     <!-- ── Incoming call ── -->
-    <string name="tts_incoming_call">Incoming call from %1$s. Say answer or ignore.</string>
+    <string name="tts_incoming_call">Call from %1$s. Answer it?</string>
     <string name="tts_call_answered">Answering call.</string>
     <string name="tts_call_rejected">Call ignored.</string>
 

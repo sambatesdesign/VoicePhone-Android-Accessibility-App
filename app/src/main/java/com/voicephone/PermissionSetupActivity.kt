@@ -26,6 +26,7 @@ class PermissionSetupActivity : AppCompatActivity() {
 
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.READ_CALL_LOG,
             Manifest.permission.READ_SMS,

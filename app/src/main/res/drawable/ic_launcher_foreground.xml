@@ -14,21 +14,14 @@
         android:pathData="M44,30 L64,30 L64,44 a10,10 0 0 1 -20,0 Z" />
     <!-- Stand -->
     <path
-        android:fillColor="#FFFFFF"
+        android:fillColor="@android:color/transparent"
         android:pathData="M38,48 Q38,66 54,66 Q70,66 70,48"
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:fillColor="@android:color/transparent" />
-    <rect
+        android:strokeWidth="4" />
+    <path
         android:fillColor="#FFFFFF"
-        android:x="51"
-        android:y="66"
-        android:width="6"
-        android:height="12" />
-    <rect
+        android:pathData="M51,66 L57,66 L57,78 L51,78 Z" />
+    <path
         android:fillColor="#FFFFFF"
-        android:x="42"
-        android:y="78"
-        android:width="24"
-        android:height="4" />
+        android:pathData="M42,78 L66,78 L66,82 L42,82 Z" />
 </vector>

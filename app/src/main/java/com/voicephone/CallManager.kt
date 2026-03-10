@@ -34,6 +34,10 @@ class CallManager : ConnectionService() {
             }
             activeConnection = null
         }
+
+        internal fun clearConnection() {
+            activeConnection = null
+        }
     }
 
     override fun onCreateOutgoingConnection(
@@ -98,7 +102,7 @@ class VoiceConnection(val number: String) : Connection() {
         Log.d(TAG_CONN, "onReject")
         setDisconnected(DisconnectCause(DisconnectCause.REJECTED))
         destroy()
-        CallManager.activeConnection = null
+        CallManager.clearConnection()
         VoiceService.instance?.onCallStateChanged(AppCallState.IDLE, "")
     }
 
@@ -107,7 +111,7 @@ class VoiceConnection(val number: String) : Connection() {
         Log.d(TAG_CONN, "onDisconnect")
         setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
         destroy()
-        CallManager.activeConnection = null
+        CallManager.clearConnection()
         VoiceService.instance?.onCallStateChanged(AppCallState.ENDED, "")
     }
 
@@ -115,7 +119,7 @@ class VoiceConnection(val number: String) : Connection() {
         super.onAbort()
         setDisconnected(DisconnectCause(DisconnectCause.REMOTE))
         destroy()
-        CallManager.activeConnection = null
+        CallManager.clearConnection()
     }
 
     companion object {

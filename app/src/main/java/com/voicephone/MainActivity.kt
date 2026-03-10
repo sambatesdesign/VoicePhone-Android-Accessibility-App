@@ -5,6 +5,7 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -79,6 +80,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         attachToService()
+        // Refresh contacts cache in case user added/edited contacts while away
+        Thread { VoiceService.instance?.contactsHelper?.loadContacts() }.start()
     }
 
     override fun onPause() {
@@ -118,13 +121,16 @@ class MainActivity : AppCompatActivity() {
     private fun setupTouchListener() {
         findViewById<View>(R.id.root).setOnClickListener {
             Log.d(TAG, "Screen touched")
-            val service = VoiceService.instance
-            if (service != null) {
-                service.startListening()
-            } else {
-                // Service not yet started — start and retry
+            val service = VoiceService.instance ?: run {
                 startVoiceService()
                 mainHandler.postDelayed({ VoiceService.instance?.startListening() }, 600)
+                return@setOnClickListener
+            }
+            // During an active or dialling call, tap = hang up immediately
+            if (service.currentAppState == AppState.IN_CALL || service.currentAppState == AppState.DIALLING) {
+                InCallHandler.instance?.hangUp()
+            } else {
+                service.startListening()
             }
         }
     }
@@ -134,7 +140,12 @@ class MainActivity : AppCompatActivity() {
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun startVoiceService() {
-        startForegroundService(Intent(this, VoiceService::class.java))
+        val intent = Intent(this, VoiceService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
     }
 
     /** Attach the state listener to the running VoiceService singleton. */
@@ -167,6 +178,8 @@ class MainActivity : AppCompatActivity() {
                 AppState.IN_CALL -> showInCall(extra)
                 AppState.INCOMING_CALL -> showIncomingCall(extra)
                 AppState.INCOMING_SMS -> showIdle() // audio-only notification
+                AppState.COMPOSING_SMS -> showListening() // mic active for message body
+                AppState.CONFIRMING_SMS -> showListening() // mic active for yes/no
             }
         }
     }

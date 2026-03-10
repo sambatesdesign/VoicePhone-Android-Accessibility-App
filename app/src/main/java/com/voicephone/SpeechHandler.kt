@@ -30,23 +30,23 @@ class SpeechHandler(
 
     companion object {
         private const val TAG = "SpeechHandler"
-        private const val LISTEN_TIMEOUT_MS = 8000L
+        private const val LISTEN_TIMEOUT_MS = 30000L
     }
 
     private var recognizer: SpeechRecognizer? = null
     var isListening = false
         private set
+    /** When true, skip parseIntent and return raw text as Unknown. */
+    var rawMode = false
 
-    fun startListening() {
-        if (isListening) return
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            onError("Speech recognition not available on this device.")
-            return
+    init {
+        if (SpeechRecognizer.isRecognitionAvailable(context)) {
+            recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+            recognizer?.setRecognitionListener(buildListener())
         }
+    }
 
-        recognizer?.destroy()
-        recognizer = SpeechRecognizer.createSpeechRecognizer(context).also { sr ->
-            sr.setRecognitionListener(object : RecognitionListener {
+    private fun buildListener() = object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
                     isListening = true
                     onListeningStarted()
@@ -85,22 +85,27 @@ class SpeechHandler(
                         ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val text = matches?.firstOrNull() ?: return
                     Log.d(TAG, "Recognised: $text")
-                    onIntent(parseIntent(text))
+                    onIntent(if (rawMode) VoiceIntent.Unknown(text) else parseIntent(text))
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {}
 
                 override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-GB")
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, LISTEN_TIMEOUT_MS)
             }
-            sr.startListening(intent)
+
+    fun startListening() {
+        if (isListening) return
+        val sr = recognizer ?: run {
+            onError("Speech recognition not available.")
+            return
         }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-GB")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, LISTEN_TIMEOUT_MS)
+        }
+        sr.startListening(intent)
     }
 
     fun stopListening() {
@@ -130,7 +135,7 @@ class SpeechHandler(
 
         return when {
             // ── Answer incoming call ──
-            text.contains("answer") -> VoiceIntent.Answer
+            text.contains("answer") || text == "yes" || text.contains("yeah") -> VoiceIntent.Answer
 
             // ── Hang up ──
             text.contains("hang up") || text.contains("hang-up")
@@ -139,7 +144,7 @@ class SpeechHandler(
 
             // ── Reject / ignore ──
             text.contains("ignore") || text.contains("reject")
-                    || text.contains("not now") -> VoiceIntent.Reject
+                    || text.contains("not now") || text == "no" || text.contains("nope") -> VoiceIntent.Reject
 
             // ── Call intent ──
             text.contains("call") || text.contains("phone")
@@ -154,8 +159,9 @@ class SpeechHandler(
                     || text.contains("read it") -> VoiceIntent.ReadSms
 
             // ── SMS send ──
-            (text.contains("send") || text.contains("reply"))
-                    && (text.contains("message") || text.contains("text")) -> {
+            text.startsWith("text ") || text.startsWith("message ") ||
+            ((text.contains("send") || text.contains("reply"))
+                    && (text.contains("message") || text.contains("text"))) -> {
                 val name = extractSendTarget(text)
                 VoiceIntent.SendSms(name)
             }
@@ -171,6 +177,12 @@ class SpeechHandler(
 
             // ── Help ──
             text.contains("help") || text.contains("what can you do") -> VoiceIntent.Help
+
+            // ── Open contacts (carer use) ──
+            text.contains("contacts") || text.contains("manage contacts") || text.contains("add contact") -> VoiceIntent.OpenContacts
+
+            // ── Open settings (carer use) ──
+            text.contains("settings") || text.contains("open settings") -> VoiceIntent.OpenSettings
 
             else -> VoiceIntent.Unknown(raw)
         }
@@ -196,8 +208,14 @@ class SpeechHandler(
     }
 
     private fun extractSendTarget(text: String): String {
-        val idx = text.indexOf(" to ")
-        return if (idx >= 0) text.substring(idx + 4).trim() else ""
+        // "send a message to NAME" / "reply to NAME"
+        val toIdx = text.indexOf(" to ")
+        if (toIdx >= 0) return text.substring(toIdx + 4).trim()
+        // "text NAME" / "message NAME"
+        for (trigger in listOf("text ", "message ")) {
+            if (text.startsWith(trigger)) return text.removePrefix(trigger).trim()
+        }
+        return ""
     }
 }
 
@@ -216,6 +234,8 @@ sealed class VoiceIntent {
     object Date : VoiceIntent()
     object MissedCalls : VoiceIntent()
     object Help : VoiceIntent()
+    object OpenContacts : VoiceIntent()
+    object OpenSettings : VoiceIntent()
     object Timeout : VoiceIntent()
     data class Unknown(val raw: String) : VoiceIntent()
 }
