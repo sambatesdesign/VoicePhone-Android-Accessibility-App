@@ -349,7 +349,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="48dp"
                 android:layout_marginBottom="8dp"
-                android:text="Two final steps"
+                android:text="One final step"
                 android:textColor="#FFFFFF"
                 android:textSize="26sp"
                 android:textStyle="bold" />
@@ -359,7 +359,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="32dp"
-                android:text="These are needed for full functionality"
+                android:text="This makes VoicePhone the main screen on the device"
                 android:textColor="#AAAAAA"
                 android:textSize="15sp" />
 
@@ -445,7 +445,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="4dp"
-                        android:text="Default Home Screen"
+                        android:text="🏠  Set as Home Screen"
                         android:textColor="#FFFFFF"
                         android:textSize="16sp"
                         android:textStyle="bold" />
@@ -453,7 +453,8 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="VoicePhone becomes the main screen when you press Home"
+                        android:lineSpacingMultiplier="1.3"
+                        android:text="Opens Settings → Default Apps → Home. Select VoicePhone from the list."
                         android:textColor="#AAAAAA"
                         android:textSize="13sp" />
                 </LinearLayout>

@@ -106,6 +106,7 @@ class OnboardingActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_onboarding)
+        hideSystemNav()
 
         // Find stable views
         btnBack = findViewById(R.id.btnBack)
@@ -379,9 +380,12 @@ class OnboardingActivity : AppCompatActivity() {
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun refreshSetupStatuses() {
+        // Hide the whole phone app row once it's set — no need to keep showing it
         val dialerDone = isDefaultDialer()
-        tvDialerDone.visibility = if (dialerDone) View.VISIBLE else View.GONE
-        btnSetDialer.visibility = if (dialerDone) View.GONE else View.VISIBLE
+        findViewById<android.view.View>(R.id.rowDefaultDialer).visibility =
+            if (dialerDone) View.GONE else View.VISIBLE
+        tvDialerDone.visibility = View.GONE  // not needed since row hides
+        btnSetDialer.visibility = View.VISIBLE
 
         val homeDone = isDefaultHome()
         tvHomeDone.visibility = if (homeDone) View.VISIBLE else View.GONE
@@ -489,6 +493,19 @@ class OnboardingActivity : AppCompatActivity() {
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemNav()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun hideSystemNav() {
+        window.decorView.systemUiVisibility = (
+            android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        )
+    }
 
     private fun dpToPx(dp: Int): Int {
         return (dp * resources.displayMetrics.density + 0.5f).toInt()

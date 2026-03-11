@@ -56,6 +56,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        hideSystemNav()
+
         // Keep screen on — core UX requirement
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
@@ -94,6 +96,19 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         pulseAnimator?.cancel()
         VoiceService.instance?.stateListener = null
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemNav()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun hideSystemNav() {
+        window.decorView.systemUiVisibility = (
+            android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        )
     }
 
     // ─────────────────────────────────────────────────────────────────────────
