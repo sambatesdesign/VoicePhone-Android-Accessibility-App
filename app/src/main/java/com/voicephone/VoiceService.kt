@@ -141,6 +141,12 @@ class VoiceService : Service() {
 
         // Restore smart mode flag after service restart
         speech.smartMode = useSmartMode
+
+        // First-launch welcome — plays bundled Deepgram audio, no network needed
+        if (!prefs.getBoolean("welcome_spoken", false)) {
+            prefs.edit().putBoolean("welcome_spoken", true).apply()
+            playBundledWelcome()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -553,15 +559,46 @@ class VoiceService : Service() {
         ringtonePlayer = null
     }
 
-    // TODO: Review after user testing — beep may not be needed if users find the
-    //       "I'm listening" TTS prompt sufficient on its own. Remove if unwanted.
+    /** Plays the pre-generated welcome MP3 bundled in res/raw — instant, no network needed. */
+    private fun playBundledWelcome() {
+        try {
+            val afd = resources.openRawResourceFd(R.raw.welcome) ?: return
+            val player = android.media.MediaPlayer().apply {
+                setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANT)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
+                setOnCompletionListener { it.release() }
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to play bundled welcome: ${e.message}")
+        }
+    }
+
     private fun playListeningBeep() {
         try {
-            val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, ToneGenerator.MAX_VOLUME)
-            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ toneGen.release() }, 300)
+            val afd = resources.openRawResourceFd(R.raw.mic_beep) ?: return
+            android.media.MediaPlayer().apply {
+                setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
+                setOnCompletionListener { it.release() }
+                prepare()
+                start()
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to play listening beep: ${e.message}")
+            Log.e(TAG, "Failed to play mic beep: ${e.message}")
         }
     }
 

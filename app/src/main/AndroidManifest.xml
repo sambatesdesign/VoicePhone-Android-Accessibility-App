@@ -77,7 +77,16 @@
         </activity>
 
         <!-- ═══════════════════════════════════════
-             First-launch permission setup
+             Onboarding — replaces PermissionSetupActivity
+             ═══════════════════════════════════════ -->
+        <activity
+            android:name=".OnboardingActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.VoicePhone" />
+
+        <!-- ═══════════════════════════════════════
+             First-launch permission setup (kept for reference)
              ═══════════════════════════════════════ -->
         <activity
             android:name=".PermissionSetupActivity"

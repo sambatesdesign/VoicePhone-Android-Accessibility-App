@@ -29,6 +29,20 @@ class TtsManager(private val context: Context) {
         private const val PREFS = "voicephone_prefs"
         private const val KEY_CLOUD_TTS = "use_cloud_tts"
         private const val DEEPGRAM_VOICE = "aura-2-thalia-en"
+
+        /** Bundled Deepgram audio assets — checked before disk cache or API call. */
+        private val BUNDLED = mapOf(
+            "I'm listening."                   to R.raw.tts_listening,
+            "Hey, how can I help?"             to R.raw.tts_greeting_smart,
+            "Call connected."                  to R.raw.tts_call_connected,
+            "Call ended."                      to R.raw.tts_call_ended,
+            "Answering call."                  to R.raw.tts_call_answered,
+            "Call ignored."                    to R.raw.tts_call_rejected,
+            "Cancelled."                       to R.raw.tts_cancelled,
+            "Message sent."                    to R.raw.tts_message_sent,
+            "You have no unread messages."     to R.raw.tts_no_messages,
+            "You have no missed calls."        to R.raw.tts_no_missed_calls
+        )
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -154,7 +168,36 @@ class TtsManager(private val context: Context) {
         isSpeaking = true
         val myRequestId = ++cloudRequestId  // capture for stale-check in background thread
 
-        // Check cache first — skip network call for repeated phrases
+        // Check bundled assets first — instant, no network, no disk I/O
+        BUNDLED[text]?.let { resId ->
+            mainHandler.post {
+                if (myRequestId != cloudRequestId) return@post
+                try {
+                    val afd = context.resources.openRawResourceFd(resId) ?: return@post
+                    cloudPlayer?.release()
+                    cloudPlayer = MediaPlayer().apply {
+                        setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                        afd.close()
+                        setOnPreparedListener { isSpeaking = true; onSpeakingChanged?.invoke(true); it.start() }
+                        setOnCompletionListener { isSpeaking = false; onSpeakingChanged?.invoke(false); onDone?.invoke() }
+                        setOnErrorListener { _, _, _ -> isSpeaking = false; onSpeakingChanged?.invoke(false); true }
+                        prepareAsync()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Bundled asset failed for '$text': ${e.message}")
+                    speakWithAndroid(text, onDone)
+                }
+            }
+            return
+        }
+
+        // Check disk cache — skip network call for repeated phrases
         val cached = cachedFile(text)
         if (cached.exists() && cached.length() > 0) {
             Log.d(TAG, "TTS cache hit: $text")

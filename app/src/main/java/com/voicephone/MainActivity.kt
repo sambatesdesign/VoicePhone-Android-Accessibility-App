@@ -64,9 +64,9 @@ class MainActivity : AppCompatActivity() {
                     WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
         )
 
-        // Check minimum permissions — redirect to setup if missing
+        // Check minimum permissions — redirect to onboarding if missing
         if (!hasMinimumPermissions()) {
-            startActivity(Intent(this, PermissionSetupActivity::class.java))
+            startActivity(Intent(this, OnboardingActivity::class.java))
             finish()
             return
         }
