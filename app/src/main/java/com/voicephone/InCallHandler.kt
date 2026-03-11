@@ -63,6 +63,23 @@ class InCallHandler : InCallService() {
         when (state) {
             Call.STATE_RINGING -> {
                 Log.d(TAG, "STATE_RINGING from $name")
+                // Take exclusive audio focus to suppress the system ringtone
+                val audio = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    val focusRequest = android.media.AudioFocusRequest.Builder(
+                        android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE
+                    ).setAudioAttributes(
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build()
+                    ).build()
+                    audio.requestAudioFocus(focusRequest)
+                } else {
+                    @Suppress("DEPRECATION")
+                    audio.requestAudioFocus(null, android.media.AudioManager.STREAM_RING,
+                        android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                }
                 VoiceService.instance?.onCallStateChanged(AppCallState.INCOMING, name)
             }
             Call.STATE_DIALING, Call.STATE_CONNECTING -> {

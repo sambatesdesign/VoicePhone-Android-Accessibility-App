@@ -66,6 +66,30 @@ class MainActivity : AppCompatActivity() {
                     WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
         )
 
+        val prefs = getSharedPreferences("voicephone_prefs", MODE_PRIVATE)
+
+        // Detect if launched as home (Android fires this when setting us as default home)
+        val launchedAsHome = intent?.categories?.contains(Intent.CATEGORY_HOME) == true
+
+        if (launchedAsHome && prefs.getBoolean("onboarding_in_progress", false)) {
+            // Show a holding screen so there's no black flash while the RoleManager
+            // dialog result returns to OnboardingActivity (already in front).
+            setContentView(android.widget.FrameLayout(this).apply {
+                setBackgroundColor(android.graphics.Color.BLACK)
+                addView(android.widget.TextView(this@MainActivity).apply {
+                    text = "Setup in progress…"
+                    setTextColor(android.graphics.Color.WHITE)
+                    textSize = 18f
+                    gravity = android.view.Gravity.CENTER
+                    layoutParams = android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                })
+            })
+            return  // do NOT finish() — home activity must stay alive
+        }
+
         // Check minimum permissions — redirect to onboarding if missing
         if (!hasMinimumPermissions()) {
             startActivity(Intent(this, OnboardingActivity::class.java))

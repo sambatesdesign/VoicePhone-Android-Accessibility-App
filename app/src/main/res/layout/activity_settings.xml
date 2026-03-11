@@ -73,6 +73,35 @@
             android:textSize="16sp"
             android:paddingBottom="48dp" />
 
+        <!-- Home Screen -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Home Screen"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Makes VoicePhone the main screen when pressing Home"
+            android:textColor="#AAAAAA"
+            android:textSize="14sp"
+            android:paddingTop="4dp"
+            android:paddingBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnSetHomeScreen"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Set as Home Screen"
+            android:textSize="16sp"
+            android:padding="14dp"
+            android:backgroundTint="#1a1a1a"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="32dp" />
+
         <!-- Phone shortcuts -->
         <TextView
             android:layout_width="match_parent"

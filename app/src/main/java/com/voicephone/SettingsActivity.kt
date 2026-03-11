@@ -1,6 +1,8 @@
 package com.voicephone
 
+import android.app.role.RoleManager
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
@@ -12,6 +14,10 @@ import androidx.appcompat.app.AppCompatActivity
  * Accessible via voice command "app settings" or "voicephone settings".
  */
 class SettingsActivity : AppCompatActivity() {
+
+    companion object {
+        private const val REQUEST_HOME_ROLE = 103
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +56,36 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_SETTINGS))
         }
 
+        findViewById<Button>(R.id.btnSetHomeScreen).setOnClickListener {
+            openDefaultHomeSettings()
+        }
+
         btnDone.setOnClickListener { finish() }
+    }
+
+    private fun openDefaultHomeSettings() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val roleManager = getSystemService(RoleManager::class.java)
+                if (roleManager.isRoleAvailable(RoleManager.ROLE_HOME) &&
+                    !roleManager.isRoleHeld(RoleManager.ROLE_HOME)) {
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(
+                        roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME),
+                        REQUEST_HOME_ROLE
+                    )
+                    return
+                }
+            }
+            startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+        } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        // No additional action needed — the role change is reflected system-wide immediately
     }
 }

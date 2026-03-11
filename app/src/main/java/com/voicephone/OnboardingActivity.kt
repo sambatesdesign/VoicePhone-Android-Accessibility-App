@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.app.role.RoleManager
 import android.telecom.TelecomManager
 import android.util.TypedValue
 import android.view.Gravity
@@ -42,6 +43,7 @@ class OnboardingActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "OnboardingActivity"
         private const val TOTAL_PAGES = 8
+        private const val REQUEST_DIALER_ROLE = 101
 
         // Permissions shown on page 3
         private val REQUIRED_PERMISSIONS = arrayOf(
@@ -86,8 +88,6 @@ class OnboardingActivity : AppCompatActivity() {
     // Setup page status views
     private lateinit var tvDialerDone: TextView
     private lateinit var btnSetDialer: Button
-    private lateinit var tvHomeDone: TextView
-    private lateinit var btnSetHome: Button
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -106,6 +106,9 @@ class OnboardingActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_onboarding)
+        // Flag so MainActivity knows not to redirect mid-onboarding
+        getSharedPreferences("voicephone_prefs", MODE_PRIVATE).edit()
+            .putBoolean("onboarding_in_progress", true).apply()
         hideSystemNav()
 
         // Find stable views
@@ -128,8 +131,6 @@ class OnboardingActivity : AppCompatActivity() {
         // Setup page views
         tvDialerDone = findViewById(R.id.tvDialerDone)
         btnSetDialer = findViewById(R.id.btnSetDialer)
-        tvHomeDone   = findViewById(R.id.tvHomeDone)
-        btnSetHome   = findViewById(R.id.btnSetHome)
 
         buildPermissionRows()
         buildPageDots()
@@ -140,7 +141,6 @@ class OnboardingActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnGetStarted).setOnClickListener { showPage(1) }
         findViewById<Button>(R.id.btnAllowAll).setOnClickListener { requestAllMissingPermissions() }
         btnSetDialer.setOnClickListener { openDefaultDialerSettings() }
-        btnSetHome.setOnClickListener { openDefaultHomeSettings() }
         findViewById<Button>(R.id.btnStartVoicePhone).setOnClickListener { launchMainActivity() }
 
         // AI upsell page — trial enables both cloud TTS and smart mode
@@ -386,10 +386,6 @@ class OnboardingActivity : AppCompatActivity() {
             if (dialerDone) View.GONE else View.VISIBLE
         tvDialerDone.visibility = View.GONE  // not needed since row hides
         btnSetDialer.visibility = View.VISIBLE
-
-        val homeDone = isDefaultHome()
-        tvHomeDone.visibility = if (homeDone) View.VISIBLE else View.GONE
-        btnSetHome.visibility = if (homeDone) View.GONE else View.VISIBLE
     }
 
     private fun isDefaultDialer(): Boolean {
@@ -401,29 +397,36 @@ class OnboardingActivity : AppCompatActivity() {
         }
     }
 
-    private fun isDefaultHome(): Boolean {
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-        return resolveInfo?.activityInfo?.packageName == packageName
-    }
-
     private fun openDefaultDialerSettings() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
-                putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+ — use RoleManager (shows a proper system dialog)
+                val roleManager = getSystemService(RoleManager::class.java)
+                if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER) &&
+                    !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+                    startActivityForResult(
+                        roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER),
+                        REQUEST_DIALER_ROLE
+                    )
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // Android 6-9 — legacy intent
+                startActivity(Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
+                    putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+                })
             }
-            startActivity(intent)
+        } catch (e: Exception) {
+            // Fallback — open default apps settings so carer can do it manually
+            startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
         }
     }
 
-    private fun openDefaultHomeSettings() {
-        // ACTION_HOME_SETTINGS is API 21+; fall back to manage default apps
-        val intent = try {
-            Intent(Settings.ACTION_HOME_SETTINGS)
-        } catch (e: Exception) {
-            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_DIALER_ROLE) {
+            refreshSetupStatuses()
         }
-        startActivity(intent)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -444,6 +447,9 @@ class OnboardingActivity : AppCompatActivity() {
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun launchMainActivity() {
+        getSharedPreferences("voicephone_prefs", MODE_PRIVATE).edit()
+            .putBoolean("onboarding_in_progress", false)
+            .putBoolean("onboarding_complete", true).apply()
         startActivity(Intent(this, MainActivity::class.java))
         finish()
     }

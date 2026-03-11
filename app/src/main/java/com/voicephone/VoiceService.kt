@@ -87,6 +87,7 @@ class VoiceService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var ringtonePlayer: MediaPlayer? = null
+    private var savedRingVolume: Int = -1
 
     // ─────────────────────────────────────────────────────────────────────────
     // Lifecycle
@@ -539,12 +540,23 @@ class VoiceService : Service() {
 
     private fun startRinging() {
         stopRinging() // ensure any previous player is released before starting a new one
+        // Mute system ring stream to suppress OEM ringtones, then play our custom one
+        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+        savedRingVolume = audioManager.getStreamVolume(AudioManager.STREAM_RING)
+        audioManager.setStreamVolume(AudioManager.STREAM_RING, 0, 0)
         try {
-            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            val afd = resources.openRawResourceFd(R.raw.ringtone)
             ringtonePlayer = MediaPlayer().apply {
-                setDataSource(applicationContext, uri)
-                setAudioStreamType(AudioManager.STREAM_RING)
+                setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
                 isLooping = true
+                setVolume(0.1f, 0.1f)
                 prepare()
                 start()
             }
@@ -557,6 +569,12 @@ class VoiceService : Service() {
         ringtonePlayer?.stop()
         ringtonePlayer?.release()
         ringtonePlayer = null
+        // Restore system ring volume
+        if (savedRingVolume >= 0) {
+            val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+            audioManager.setStreamVolume(AudioManager.STREAM_RING, savedRingVolume, 0)
+            savedRingVolume = -1
+        }
     }
 
     /** Plays the pre-generated welcome MP3 bundled in res/raw — instant, no network needed. */
