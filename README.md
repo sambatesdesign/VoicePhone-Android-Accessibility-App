@@ -6,16 +6,18 @@ A voice-first Android phone app designed for blind and visually impaired users. 
 
 ## What it does
 
-- **Make calls** — say "Call Mum" and it finds the contact and dials
+- **Make calls** — say "Call Mum" or naturally "give Sam a ring" (smart mode)
 - **Answer calls** — phone rings + announces who's calling, say "yes" or "answer" to pick up
 - **Hang up** — tap the screen during a call to hang up immediately
 - **Reject calls** — say "no" or "ignore" to reject an incoming call
 - **Send messages** — say "text John" or "message John", speak the message, confirm with "yes"
-- **Read messages** — say "read my messages" to hear unread texts
+- **Read messages** — say "read my messages" to hear the 3 most recent unread texts
 - **Time & date** — say "what time is it" or "what's the date"
 - **Missed calls** — say "who called me"
-- **Open contacts** — say "open contacts" for a carer to manage the address book
-- **Open settings** — say "open settings" for a carer to adjust phone settings
+- **Ask anything** — in smart mode, ask Claude general questions and get spoken answers
+- **Open contacts** — say "open settings" for a carer to manage the address book and toggle features
+- **Cancel anything** — say "stop" or "cancel" at any time to return to idle
+- **Tap to cancel** — tap the screen while speaking to immediately stop the current response
 - **Always ready** — runs as a foreground service, restarts on reboot
 
 ---
@@ -26,12 +28,14 @@ A voice-first Android phone app designed for blind and visually impaired users. 
 app/src/main/java/com/voicephone/
 ├── MainActivity.kt           # Pure view layer — state machine renderer
 ├── VoiceService.kt           # Foreground service engine, owns all state
-├── SpeechHandler.kt          # STT + keyword intent parser (Phase 3 LLM seam)
-├── TtsManager.kt             # TextToSpeech wrapper (0.85× rate for clarity)
-├── ContactsHelper.kt         # ContactsContract lookup + fuzzy name matching
+├── SpeechHandler.kt          # STT + keyword/smart intent parser
+├── TtsManager.kt             # TTS wrapper — Android + Deepgram cloud, with disk cache
+├── ClaudeIntentParser.kt     # Claude Haiku API — natural language intent parsing
+├── ContactsHelper.kt         # ContactsContract lookup + fuzzy name + number matching
 ├── CallManager.kt            # ConnectionService implementation
 ├── InCallHandler.kt          # InCallService — routes call events to VoiceService
 ├── SmsHelper.kt              # Unread SMS reading + sending
+├── SettingsActivity.kt       # Carer settings screen — toggles for smart mode + cloud TTS
 ├── IncomingCallReceiver.kt   # Wakes service on incoming call (fallback)
 ├── SmsReceiver.kt            # Wakes service on incoming SMS
 ├── BootReceiver.kt           # Restarts service after device reboot
@@ -43,6 +47,8 @@ app/src/main/java/com/voicephone/
 IDLE → (touch) → LISTENING → (speech recognised) → PROCESSING
      → DIALLING / IN_CALL / INCOMING_CALL / IDLE
      → COMPOSING_SMS → CONFIRMING_SMS → IDLE
+     → CONFIRMING_SETTINGS → IDLE
+     → SPEAKING → IDLE
 ```
 
 ---
@@ -68,15 +74,31 @@ On first launch, the app walks through all required permissions via TTS. You wil
 
 The app defaults to Android's on-device TTS. To enable the higher-quality Deepgram neural voice:
 
-1. Create a free account at [deepgram.com](https://deepgram.com) and get an API key
-2. Add the key to `local.properties` (this file is gitignored and never committed):
+1. Create an account at [deepgram.com](https://deepgram.com) and get an API key
+2. Add the key to `local.properties` (gitignored, never committed):
    ```
    DEEPGRAM_API_KEY=your_key_here
    ```
-3. Rebuild and deploy the app
+3. Rebuild and deploy
 4. On the device, say **"use cloud voice"** to switch to Deepgram, or **"use local voice"** to switch back
 
-The voice used is `aura-2-thalia-en` — change `DEEPGRAM_VOICE` in `TtsManager.kt` to use a different voice. The app falls back to Android TTS automatically if the network is unavailable or the API call fails.
+The voice is `aura-2-thalia-en` — change `DEEPGRAM_VOICE` in `TtsManager.kt` to use a different voice. Frequently spoken phrases are cached to disk so repeated calls are instant with no network round trip. Falls back to Android TTS automatically if the network is unavailable.
+
+### Optional: Smart Mode (Claude AI)
+
+Smart mode replaces keyword matching with Claude Haiku for natural language understanding:
+
+1. Get an Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
+2. Add to `local.properties`:
+   ```
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+3. Rebuild and deploy
+4. On the device, say **"use smart mode"** to enable, or **"use basic mode"** to turn off
+
+In smart mode, users can speak naturally ("give Sam a ring", "am I free today?") rather than exact commands. Claude also answers general questions directly. Falls back to keyword matching if the API call fails.
+
+Both API keys can also be toggled via the in-app settings screen (say **"open settings"**).
 
 ---
 
@@ -93,6 +115,7 @@ The voice used is `aura-2-thalia-en` — change `DEEPGRAM_VOICE` in `TtsManager.
 | `RECORD_AUDIO` | Microphone for speech recognition |
 | `FOREGROUND_SERVICE` | Keep service alive in background |
 | `RECEIVE_BOOT_COMPLETED` | Restart after reboot |
+| `INTERNET` | Cloud TTS and smart mode API calls |
 
 ---
 
@@ -102,10 +125,8 @@ The voice used is `aura-2-thalia-en` — change `DEEPGRAM_VOICE` in `TtsManager.
 |---|---|---|
 | **1 — MVP** | ✅ Done | Voice calls, SMS read, time/date, incoming call handling |
 | **2 — SMS compose + confirmation** | ✅ Done | Speak message body, confirm before send, re-record option |
-| **3 — LLM integration** | Planned | Replace `SpeechHandler.parseIntent()` with Claude API for natural language |
+| **3 — LLM + cloud voice** | ✅ Done | Claude API smart mode, Deepgram neural TTS with disk cache |
 | **4 — Family setup app** | Planned | Companion app for carers to manage contacts + preferences |
-
-**Phase 3 seam:** `SpeechHandler.parseIntent()` is the single isolated swap point for Claude API. The offline keyword matcher is the fallback when no network is available — the rest of the call/TTS/SMS stack is unchanged.
 
 ---
 

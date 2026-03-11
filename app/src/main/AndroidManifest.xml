@@ -85,6 +85,12 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.VoicePhone" />
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.VoicePhone" />
+
         <!-- ═══════════════════════════════════════
              Foreground service — always running
              ═══════════════════════════════════════ -->

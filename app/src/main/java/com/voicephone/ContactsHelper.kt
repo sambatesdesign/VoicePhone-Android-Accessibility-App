@@ -72,6 +72,9 @@ class ContactsHelper(private val context: Context) {
     /** Returns the single best contact for [query], or null if none found. */
     fun findBestContact(query: String): Contact? = findContacts(query).firstOrNull()
 
+    /** Returns all contact names — passed to Claude for context. */
+    fun getContactNames(): List<String> = cachedContacts.map { it.name }.distinct()
+
     /** Look up a contact by phone number. Strips formatting and normalises to last 9 digits. */
     fun findByNumber(number: String): Contact? {
         val stripped = number.replace(Regex("[\\s\\-+()]"), "")

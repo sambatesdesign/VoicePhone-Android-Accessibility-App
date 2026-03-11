@@ -177,9 +177,11 @@ class MainActivity : AppCompatActivity() {
                 AppState.DIALLING -> showDialling(extra)
                 AppState.IN_CALL -> showInCall(extra)
                 AppState.INCOMING_CALL -> showIncomingCall(extra)
+                AppState.SPEAKING -> showSpeaking()
                 AppState.INCOMING_SMS -> showIdle() // audio-only notification
                 AppState.COMPOSING_SMS -> showListening() // mic active for message body
                 AppState.CONFIRMING_SMS -> showListening() // mic active for yes/no
+                AppState.CONFIRMING_SETTINGS -> showListening() // mic active for yes/no
             }
         }
     }
@@ -200,6 +202,15 @@ class MainActivity : AppCompatActivity() {
         callLayout.visibility = View.GONE
         tvStatus.visibility = View.VISIBLE
         tvStatus.text = getString(R.string.listening)
+        listeningIndicator.visibility = View.VISIBLE
+        startListeningPulse()
+    }
+
+    private fun showSpeaking() {
+        stopPulse()
+        callLayout.visibility = View.GONE
+        tvStatus.visibility = View.VISIBLE
+        tvStatus.text = getString(R.string.speaking)
         listeningIndicator.visibility = View.VISIBLE
         startListeningPulse()
     }

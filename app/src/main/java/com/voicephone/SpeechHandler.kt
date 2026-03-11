@@ -36,8 +36,12 @@ class SpeechHandler(
     private var recognizer: SpeechRecognizer? = null
     var isListening = false
         private set
-    /** When true, skip parseIntent and return raw text as Unknown. */
+    /** When true, skip parseIntent and return raw text as Unknown (used for SMS body capture). */
     var rawMode = false
+    /** When true, bypass keyword matching so Claude handles intent parsing. */
+    var smartMode = false
+    /** When true, suspend smartMode temporarily (e.g. yes/no confirmation flows). */
+    var smartModeSuspended = false
 
     init {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
@@ -85,7 +89,25 @@ class SpeechHandler(
                         ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val text = matches?.firstOrNull() ?: return
                     Log.d(TAG, "Recognised: $text")
-                    onIntent(if (rawMode) VoiceIntent.Unknown(text) else parseIntent(text))
+                    // Universal commands always work regardless of mode
+                    val t = text.lowercase().trim()
+                    val universal = when {
+                        t == "stop" || t == "cancel" || t.contains("stop that") || t.contains("never mind") -> VoiceIntent.Cancel
+                        t.contains("smart mode") || t.contains("use smart") -> VoiceIntent.EnableSmartMode
+                        t.contains("basic mode") || t.contains("use basic") || t.contains("turn off smart") -> VoiceIntent.DisableSmartMode
+                        t.contains("cloud voice") || t.contains("use cloud") -> VoiceIntent.EnableCloudTts
+                        t.contains("local voice") || t.contains("use local") || t.contains("turn off cloud") -> VoiceIntent.DisableCloudTts
+                        else -> null
+                    }
+                    if (universal != null) { onIntent(universal); return }
+                    // rawMode: SMS body capture
+                    // smartMode + not suspended: send to Claude
+                    // default / suspended: keyword matching
+                    onIntent(when {
+                        rawMode -> VoiceIntent.Unknown(text)
+                        smartMode && !smartModeSuspended -> VoiceIntent.Unknown(text)
+                        else -> parseIntent(text)
+                    })
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {}
@@ -188,6 +210,10 @@ class SpeechHandler(
             text.contains("cloud voice") || text.contains("use cloud") -> VoiceIntent.EnableCloudTts
             text.contains("local voice") || text.contains("use local") || text.contains("turn off cloud") -> VoiceIntent.DisableCloudTts
 
+            // ── Smart mode (Claude) toggle ──
+            text.contains("smart mode") || text.contains("turn on smart") -> VoiceIntent.EnableSmartMode
+            text.contains("basic mode") || text.contains("turn off smart") -> VoiceIntent.DisableSmartMode
+
             else -> VoiceIntent.Unknown(raw)
         }
     }
@@ -242,6 +268,10 @@ sealed class VoiceIntent {
     object OpenSettings : VoiceIntent()
     object EnableCloudTts : VoiceIntent()
     object DisableCloudTts : VoiceIntent()
+    object Cancel : VoiceIntent()
+    object EnableSmartMode : VoiceIntent()
+    object DisableSmartMode : VoiceIntent()
+    data class DirectAnswer(val response: String) : VoiceIntent()
     object Timeout : VoiceIntent()
     data class Unknown(val raw: String) : VoiceIntent()
 }

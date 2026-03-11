@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="VoicePhone Settings"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:paddingBottom="32dp" />
+
+        <!-- Cloud Voice -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Cloud Voice (Deepgram)"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Uses Deepgram's neural voice instead of the built-in Android voice. Sounds more natural but requires internet."
+            android:textColor="#AAAAAA"
+            android:textSize="14sp"
+            android:paddingTop="4dp"
+            android:paddingBottom="12dp" />
+
+        <Switch
+            android:id="@+id/switchCloudTts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Cloud voice on"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:paddingBottom="32dp" />
+
+        <!-- Smart Mode -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Smart Mode (Claude AI)"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Uses Claude AI to understand natural speech instead of fixed commands. Say anything naturally — Claude figures out what you mean. Requires internet and adds a short delay."
+            android:textColor="#AAAAAA"
+            android:textSize="14sp"
+            android:paddingTop="4dp"
+            android:paddingBottom="12dp" />
+
+        <Switch
+            android:id="@+id/switchSmartMode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Smart mode on"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:paddingBottom="48dp" />
+
+        <!-- Phone shortcuts -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Phone"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:paddingBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnOpenContacts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Open Contacts"
+            android:textSize="16sp"
+            android:padding="14dp"
+            android:backgroundTint="#1a1a1a"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnPhoneSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Open Phone Settings"
+            android:textSize="16sp"
+            android:padding="14dp"
+            android:backgroundTint="#1a1a1a"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="32dp" />
+
+        <Button
+            android:id="@+id/btnDone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Done"
+            android:textSize="18sp"
+            android:padding="16dp"
+            android:backgroundTint="#333333"
+            android:textColor="#FFFFFF" />
+
+    </LinearLayout>
+</ScrollView>

@@ -7,7 +7,9 @@
 
     <!-- ── Listening / STT ── -->
     <string name="listening">Listening…</string>
+    <string name="speaking">Speaking…</string>
     <string name="tts_greeting">I\'m listening.</string>
+    <string name="tts_greeting_smart">Hey, how can I help?</string>
     <string name="tts_sorry">Sorry, I didn\'t understand that. Say help to hear what I can do.</string>
 
     <!-- ── Calling ── -->
@@ -47,12 +49,18 @@
     <string name="tts_missed_calls_plural">You have %1$d missed calls. The most recent was from %2$s.</string>
 
     <!-- ── Help ── -->
-    <string name="tts_help">Here\'s what I can do. Say call followed by a name to make a phone call.
-        Say hang up to end a call.
-        Say answer to answer an incoming call.
+    <string name="tts_help">Here\'s what I can do.
+        Say call followed by a name to make a phone call.
+        Tap the screen during a call to hang up.
+        Say yes or answer when a call is incoming to pick up.
+        Say text or message followed by a name to send a text.
         Say read my messages to hear your texts.
-        Say what time is it or what\'s the date for the time and date.
-        Say who called me to hear missed calls.</string>
+        Say what time is it to hear the time.
+        Say what\'s the date to hear today\'s date.
+        Say who called me to hear missed calls.
+        Say stop or cancel at any time to go back.
+        Say use smart mode to enable AI understanding, or use basic mode to turn it off.
+        Say use cloud voice to switch to the AI voice, or use local voice to switch back.</string>
 
     <!-- ── Setup / permissions ── -->
     <string name="tts_welcome">Welcome to VoicePhone. I need a few permissions to work properly.</string>
@@ -73,7 +81,7 @@
     <string name="notification_text">Touch the screen to speak</string>
 
     <!-- ── Processing ── -->
-    <string name="processing">Processing…</string>
+    <string name="processing">Thinking…</string>
 
     <!-- ── Call screen labels ── -->
     <string name="calling_label">Calling</string>

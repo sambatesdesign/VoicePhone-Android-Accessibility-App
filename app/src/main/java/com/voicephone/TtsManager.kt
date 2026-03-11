@@ -48,9 +48,13 @@ class TtsManager(private val context: Context) {
     var isSpeaking = false
         private set
 
+    /** Called on main thread whenever TTS starts (true) or stops (false) speaking. */
+    var onSpeakingChanged: ((Boolean) -> Unit)? = null
+
     private var pendingOnReady: (() -> Unit)? = null
     private val onDoneCallbacks = mutableMapOf<String, () -> Unit>()
     private var cloudPlayer: MediaPlayer? = null
+    @Volatile private var cloudRequestId = 0  // incremented on each new cloud request; cancelled if stale
 
     init {
         tts = TextToSpeech(context) { status ->
@@ -59,10 +63,14 @@ class TtsManager(private val context: Context) {
                 tts?.setSpeechRate(0.85f)
                 tts?.setPitch(1.0f)
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) { isSpeaking = true }
+                    override fun onStart(utteranceId: String?) {
+                        isSpeaking = true
+                        mainHandler.post { onSpeakingChanged?.invoke(true) }
+                    }
                     override fun onDone(utteranceId: String?) {
                         isSpeaking = false
                         mainHandler.post {
+                            onSpeakingChanged?.invoke(false)
                             onDoneCallbacks[utteranceId]?.invoke()
                             onDoneCallbacks.remove(utteranceId)
                         }
@@ -105,8 +113,58 @@ class TtsManager(private val context: Context) {
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, uid)
     }
 
+    /** Play an audio file via MediaPlayer. [deleteAfter] = false for cached files. */
+    private fun playAudioFile(file: File, onDone: (() -> Unit)?, deleteAfter: Boolean) {
+        cloudPlayer?.release()
+        cloudPlayer = MediaPlayer().apply {
+            setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            setDataSource(file.absolutePath)
+            setOnPreparedListener {
+                isSpeaking = true
+                onSpeakingChanged?.invoke(true)
+                it.start()
+            }
+            setOnCompletionListener {
+                isSpeaking = false
+                onSpeakingChanged?.invoke(false)
+                if (deleteAfter) file.delete()
+                onDone?.invoke()
+            }
+            setOnErrorListener { _, _, _ ->
+                isSpeaking = false
+                onSpeakingChanged?.invoke(false)
+                true
+            }
+            prepareAsync()
+        }
+    }
+
+    /** Returns the persistent cache file for a given text+voice combination, or null if not cached. */
+    private fun cachedFile(text: String): File {
+        val key = "${DEEPGRAM_VOICE}_${text.hashCode()}"
+        return File(context.filesDir, "tts_cache_$key.mp3")
+    }
+
     private fun speakWithDeepgram(text: String, onDone: (() -> Unit)?) {
         isSpeaking = true
+        val myRequestId = ++cloudRequestId  // capture for stale-check in background thread
+
+        // Check cache first — skip network call for repeated phrases
+        val cached = cachedFile(text)
+        if (cached.exists() && cached.length() > 0) {
+            Log.d(TAG, "TTS cache hit: $text")
+            mainHandler.post {
+                if (myRequestId != cloudRequestId) return@post
+                playAudioFile(cached, onDone, deleteAfter = false)
+            }
+            return
+        }
+
         val body = """{"text":"${text.replace("\"", "\\\"")}"}"""
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
@@ -118,16 +176,20 @@ class TtsManager(private val context: Context) {
         Thread {
             try {
                 val response = http.newCall(request).execute()
+                if (myRequestId != cloudRequestId) return@Thread  // cancelled by newer request
                 if (!response.isSuccessful) {
                     Log.w(TAG, "Deepgram failed (${response.code}), falling back to Android TTS")
                     mainHandler.post { isSpeaking = false; speakWithAndroid(text, onDone) }
                     return@Thread
                 }
                 val audioBytes = response.body!!.bytes()
-                val tmp = File.createTempFile("dg_tts", ".mp3", context.cacheDir)
-                tmp.writeBytes(audioBytes)
+                if (myRequestId != cloudRequestId) return@Thread  // cancelled while downloading
+                // Save to persistent cache so next call is instant
+                cached.writeBytes(audioBytes)
+                val tmp = cached  // use cache file directly
 
                 mainHandler.post {
+                    if (myRequestId != cloudRequestId) { return@post }  // cancelled (keep cache)
                     cloudPlayer?.release()
                     cloudPlayer = MediaPlayer().apply {
                         setAudioAttributes(
@@ -137,19 +199,25 @@ class TtsManager(private val context: Context) {
                                 .build()
                         )
                         setDataSource(tmp.absolutePath)
+                        setOnPreparedListener {
+                            isSpeaking = true
+                            onSpeakingChanged?.invoke(true)
+                            it.start()
+                        }
                         setOnCompletionListener {
                             isSpeaking = false
-                            tmp.delete()
+                            onSpeakingChanged?.invoke(false)
+                            // Don't delete — it's the cache file
                             onDone?.invoke()
                         }
                         setOnErrorListener { _, _, _ ->
                             isSpeaking = false
+                            onSpeakingChanged?.invoke(false)
                             Log.e(TAG, "MediaPlayer error — falling back")
                             speakWithAndroid(text, onDone)
                             true
                         }
-                        prepare()
-                        start()
+                        prepareAsync()
                     }
                 }
             } catch (e: Exception) {
@@ -160,6 +228,7 @@ class TtsManager(private val context: Context) {
     }
 
     fun stop() {
+        cloudRequestId++  // invalidate any in-flight Deepgram download
         tts?.stop()
         cloudPlayer?.stop()
         cloudPlayer?.release()

@@ -53,7 +53,7 @@ class VoiceService : Service() {
     // ── Core components ──────────────────────────────────────────────────────
     lateinit var tts: TtsManager
         private set
-    private lateinit var speech: SpeechHandler
+    lateinit var speech: SpeechHandler
     lateinit var contactsHelper: ContactsHelper
         private set
     private lateinit var smsHelper: SmsHelper
@@ -69,6 +69,18 @@ class VoiceService : Service() {
     private var lastIncomingCaller: String = ""
     private var pendingSmsContact: Contact? = null
     private var pendingSmsOutbodyDraft: String = ""
+
+    private val prefs by lazy {
+        getSharedPreferences("voicephone_prefs", MODE_PRIVATE)
+    }
+    var useSmartMode: Boolean
+        get() = prefs.getBoolean("use_smart_mode", false)
+        set(value) { prefs.edit().putBoolean("use_smart_mode", value).apply() }
+    private val claudeParser by lazy {
+        if (BuildConfig.ANTHROPIC_API_KEY.isNotEmpty())
+            ClaudeIntentParser(BuildConfig.ANTHROPIC_API_KEY)
+        else null
+    }
 
     /** Activity registers here to receive state updates for the UI. */
     var stateListener: ((AppState, String) -> Unit)? = null
@@ -90,7 +102,16 @@ class VoiceService : Service() {
 
         acquireWakeLock()
 
-        tts = TtsManager(this)
+        tts = TtsManager(this).also { t ->
+            t.onSpeakingChanged = { speaking ->
+                // IDLE or PROCESSING → SPEAKING when TTS starts (not during calls)
+                if (speaking && (appState == AppState.IDLE || appState == AppState.PROCESSING)) {
+                    updateState(AppState.SPEAKING, "")
+                } else if (!speaking && appState == AppState.SPEAKING) {
+                    updateState(AppState.IDLE, "")
+                }
+            }
+        }
         contactsHelper = ContactsHelper(this)
         smsHelper = SmsHelper(this)
 
@@ -101,7 +122,8 @@ class VoiceService : Service() {
                 if (appState != AppState.INCOMING_CALL &&
                     appState != AppState.IN_CALL &&
                     appState != AppState.COMPOSING_SMS &&
-                    appState != AppState.CONFIRMING_SMS) {
+                    appState != AppState.CONFIRMING_SMS &&
+                    appState != AppState.CONFIRMING_SETTINGS) {
                     updateState(AppState.LISTENING, "")
                 }
                 playListeningBeep()
@@ -116,6 +138,9 @@ class VoiceService : Service() {
 
         // Load contacts in background
         Thread { contactsHelper.loadContacts() }.start()
+
+        // Restore smart mode flag after service restart
+        speech.smartMode = useSmartMode
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -158,7 +183,12 @@ class VoiceService : Service() {
             updateState(AppState.IDLE, "")
             return
         }
-        if (tts.isSpeaking) return
+        // Tap while speaking = cancel
+        if (tts.isSpeaking || appState == AppState.SPEAKING) {
+            tts.cancelAll()
+            updateState(AppState.IDLE, "")
+            return
+        }
 
         if (appState == AppState.IN_CALL) {
             tts.speak(getString(R.string.tts_in_call_options)) {
@@ -174,7 +204,9 @@ class VoiceService : Service() {
         }
 
         updateState(AppState.LISTENING, "")
-        tts.speak(getString(R.string.tts_greeting)) {
+        val greeting = if (useSmartMode) getString(R.string.tts_greeting_smart)
+                       else getString(R.string.tts_greeting)
+        tts.speak(greeting) {
             speech.startListening()
         }
     }
@@ -199,7 +231,8 @@ class VoiceService : Service() {
             val contact = pendingSmsContact ?: run {
                 updateState(AppState.IDLE, ""); return
             }
-            speech.rawMode = false  // confirmation phase uses normal parsing (yes/no)
+            speech.rawMode = false
+            speech.smartModeSuspended = true  // yes/no needs keyword matching, not Claude
             pendingSmsOutbodyDraft = body
             updateState(AppState.CONFIRMING_SMS, contact.name)
             tts.speak("Your message to ${contact.name} says: $body. Ready to send it?") {
@@ -213,6 +246,7 @@ class VoiceService : Service() {
             val contact = pendingSmsContact
             when (intent) {
                 is VoiceIntent.Answer -> { // "yes"
+                    speech.smartModeSuspended = false
                     if (contact != null) {
                         smsHelper.sendSms(contact.number, pendingSmsOutbodyDraft)
                         tts.speak(getString(R.string.tts_message_sent))
@@ -222,6 +256,7 @@ class VoiceService : Service() {
                     updateState(AppState.IDLE, "")
                 }
                 is VoiceIntent.Reject -> { // "no" — re-ask for message
+                    speech.smartModeSuspended = false
                     speech.rawMode = true
                     updateState(AppState.COMPOSING_SMS, contact?.name ?: "")
                     tts.speak(getString(R.string.tts_say_your_message)) { speech.startListening() }
@@ -259,12 +294,11 @@ class VoiceService : Service() {
                 updateState(AppState.IDLE, "")
             }
             is VoiceIntent.OpenSettings -> {
-                tts.speak("Opening settings.")
-                val i = android.content.Intent(android.provider.Settings.ACTION_SETTINGS).apply {
-                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                updateState(AppState.CONFIRMING_SETTINGS, "")
+                speech.smartModeSuspended = true
+                tts.speak("This screen requires your carer to operate. Are you sure you want to continue? Say yes or no.") {
+                    speech.startListening()
                 }
-                startActivity(i)
-                updateState(AppState.IDLE, "")
             }
             is VoiceIntent.EnableCloudTts -> {
                 tts.useCloudTts = true
@@ -283,9 +317,67 @@ class VoiceService : Service() {
                     else -> updateState(AppState.IDLE, "")
                 }
             }
+            is VoiceIntent.DirectAnswer -> {
+                // Stay in PROCESSING — onSpeakingChanged will transition to SPEAKING then IDLE
+                tts.speak(intent.response)
+            }
+            is VoiceIntent.EnableSmartMode -> {
+                useSmartMode = true
+                speech.smartMode = true
+                tts.speak("Smart mode is now on. I'll use AI to understand natural speech.")
+                updateState(AppState.IDLE, "")
+            }
+            is VoiceIntent.DisableSmartMode -> {
+                useSmartMode = false
+                speech.smartMode = false
+                tts.speak("Switched back to basic commands.")
+                updateState(AppState.IDLE, "")
+            }
+            is VoiceIntent.Cancel -> {
+                // Also handles cancelling settings confirmation
+                if (appState == AppState.CONFIRMING_SETTINGS) {
+                    speech.smartModeSuspended = false
+                    tts.speak("Cancelled.")
+                    updateState(AppState.IDLE, "")
+                    return
+                }
+                // Universal escape — clean up any active flow and return to idle
+                pendingSmsContact = null
+                pendingSmsOutbodyDraft = ""
+                speech.rawMode = false
+                speech.smartModeSuspended = false
+                tts.cancelAll()
+                speech.stopListening()
+                tts.speak("Cancelled.")
+                updateState(AppState.IDLE, "")
+            }
             is VoiceIntent.Unknown -> {
+                if (appState == AppState.CONFIRMING_SETTINGS) {
+                    // Didn't say yes or no clearly — re-ask
+                    tts.speak("Say yes to open settings with your carer, or no to cancel.") {
+                        speech.startListening()
+                    }
+                    return
+                }
                 if (appState == AppState.INCOMING_CALL) {
                     announceIncomingCall(lastIncomingCaller)
+                } else if (useSmartMode && claudeParser != null) {
+                    // Show thinking indicator while Claude processes (screen shows "Thinking…")
+                    updateState(AppState.PROCESSING, "")
+                    val raw = intent.raw
+                    val contacts = contactsHelper.getContactNames()
+                    Thread {
+                        val claudeIntent = claudeParser?.parse(raw, contacts)
+                            ?: VoiceIntent.Unknown(raw)
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            if (claudeIntent is VoiceIntent.Unknown) {
+                                tts.speak(getString(R.string.tts_sorry))
+                                updateState(AppState.IDLE, "")
+                            } else {
+                                handleIntent(claudeIntent)
+                            }
+                        }
+                    }.start()
                 } else {
                     tts.speak(getString(R.string.tts_sorry))
                     updateState(AppState.IDLE, "")
@@ -343,6 +435,16 @@ class VoiceService : Service() {
     }
 
     private fun handleAnswer() {
+        if (appState == AppState.CONFIRMING_SETTINGS) {
+            speech.smartModeSuspended = false
+            tts.speak("Opening settings. Ask your carer to help.")
+            val i = android.content.Intent(this, SettingsActivity::class.java).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(i)
+            updateState(AppState.IDLE, "")
+            return
+        }
         if (appState != AppState.INCOMING_CALL) {
             tts.speak(getString(R.string.tts_sorry))
             return
@@ -352,6 +454,12 @@ class VoiceService : Service() {
     }
 
     private fun handleReject() {
+        if (appState == AppState.CONFIRMING_SETTINGS) {
+            speech.smartModeSuspended = false
+            tts.speak("Cancelled.")
+            updateState(AppState.IDLE, "")
+            return
+        }
         if (appState != AppState.INCOMING_CALL) {
             tts.speak(getString(R.string.tts_sorry))
             return
@@ -374,10 +482,21 @@ class VoiceService : Service() {
         Log.d(TAG, "onCallStateChanged: $state ($callerName)")
         when (state) {
             AppCallState.INCOMING -> {
-                // Guard: ignore spurious RINGING broadcasts while already in an active call
+                // Ignore while already in a call
                 if (appState == AppState.IN_CALL || appState == AppState.DIALLING) return
+                if (appState == AppState.INCOMING_CALL) {
+                    // Second fire (InCallHandler has better name) — update if improved
+                    if (!contactsHelper.isPhoneNumber(callerName) && callerName != lastIncomingCaller) {
+                        lastIncomingCaller = callerName
+                        updateState(AppState.INCOMING_CALL, callerName)
+                        tts.cancelAll()
+                        announceIncomingCall(callerName)
+                    }
+                    return
+                }
                 lastIncomingCaller = callerName
                 updateState(AppState.INCOMING_CALL, callerName)
+                speech.smartModeSuspended = true
                 startRinging()
                 announceIncomingCall(callerName)
             }
@@ -386,17 +505,21 @@ class VoiceService : Service() {
                 tts.speak(getString(R.string.tts_calling, callerName))
             }
             AppCallState.IN_CALL -> {
+                speech.smartModeSuspended = false
                 stopRinging()
                 playConnectedTone()
                 updateState(AppState.IN_CALL, callerName)
                 tts.speak(getString(R.string.tts_call_connected))
             }
             AppCallState.ENDED -> {
+                if (appState == AppState.IDLE) return  // already handled
+                speech.smartModeSuspended = false
                 stopRinging()
                 tts.speak(getString(R.string.tts_call_ended))
                 updateState(AppState.IDLE, "")
             }
             AppCallState.IDLE -> {
+                if (appState == AppState.IDLE) return  // already idle
                 stopRinging()
                 updateState(AppState.IDLE, "")
             }
@@ -452,15 +575,10 @@ class VoiceService : Service() {
         }
     }
 
-    private fun enableSpeaker() {
-        (getSystemService(AUDIO_SERVICE) as AudioManager).isSpeakerphoneOn = true
-    }
-
-    private fun disableSpeaker() {
-        (getSystemService(AUDIO_SERVICE) as AudioManager).isSpeakerphoneOn = false
-    }
 
     private fun announceIncomingCall(callerName: String) {
+        // Stop any in-progress TTS (e.g. Deepgram cloud player) before announcing
+        tts.stop()
         tts.speak(getString(R.string.tts_incoming_call, callerName)) {
             speech.startListening()
         }
@@ -495,12 +613,15 @@ class VoiceService : Service() {
             tts.speak(getString(R.string.tts_no_unread_messages))
             updateState(AppState.IDLE, "")
         } else {
-            val text = messages.joinToString(". Next message. ") { msg ->
+            val total = messages.size
+            val recent = messages.takeLast(3)
+            val intro = if (total > 3) "You have $total unread messages. Here are the 3 most recent. "
+                        else ""
+            val text = intro + recent.joinToString(". Next message. ") { msg ->
                 val name = contactsHelper.findByNumber(msg.sender)?.name ?: msg.sender
                 "From $name. ${msg.body}"
             }
-            tts.speak(text)
-            updateState(AppState.IDLE, "")
+            tts.speak(text)  // onSpeakingChanged handles → SPEAKING → IDLE
         }
     }
 
@@ -573,8 +694,9 @@ class VoiceService : Service() {
     }
 
     private fun handleHelp() {
+        // Don't set IDLE here — onSpeakingChanged handles PROCESSING → SPEAKING → IDLE
+        // This prevents showing the default screen while Deepgram downloads the long help text
         tts.speak(getString(R.string.tts_help))
-        updateState(AppState.IDLE, "")
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -632,10 +754,12 @@ enum class AppState {
     IDLE,
     LISTENING,
     PROCESSING,
+    SPEAKING,
     IN_CALL,
     DIALLING,
     INCOMING_CALL,
     INCOMING_SMS,
     COMPOSING_SMS,
-    CONFIRMING_SMS
+    CONFIRMING_SMS,
+    CONFIRMING_SETTINGS
 }

@@ -18,6 +18,7 @@ android {
         def localPropsFile = rootProject.file("local.properties")
         if (localPropsFile.exists()) props.load(localPropsFile.newDataInputStream())
         buildConfigField "String", "DEEPGRAM_API_KEY", "\"${props.getProperty('DEEPGRAM_API_KEY', '')}\""
+        buildConfigField "String", "ANTHROPIC_API_KEY", "\"${props.getProperty('ANTHROPIC_API_KEY', '')}\""
     }
 
     buildFeatures {
