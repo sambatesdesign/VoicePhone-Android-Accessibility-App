@@ -50,7 +50,7 @@ class SpeechHandler(
         }
     }
 
-    private fun buildListener() = object : RecognitionListener {
+    private fun buildListener(): RecognitionListener = object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
                     isListening = true
                     onListeningStarted()
@@ -71,6 +71,18 @@ class SpeechHandler(
                 override fun onError(error: Int) {
                     isListening = false
                     onListeningEnded()
+                    // ERROR_SERVER_DISCONNECTED (11) — connection dropped after idle
+                    // Recreate the recognizer and retry once automatically
+                    if (error == 11) {
+                        Log.w(TAG, "STT server disconnected — recreating recognizer and retrying")
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            recognizer?.destroy()
+                            recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+                            recognizer?.setRecognitionListener(buildListener())
+                            startListening()
+                        }
+                        return
+                    }
                     val msg = when (error) {
                         SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
                         SpeechRecognizer.ERROR_NO_MATCH -> "timeout"
