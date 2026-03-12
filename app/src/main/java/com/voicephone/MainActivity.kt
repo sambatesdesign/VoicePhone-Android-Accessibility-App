@@ -90,8 +90,8 @@ class MainActivity : AppCompatActivity() {
             return  // do NOT finish() — home activity must stay alive
         }
 
-        // Check minimum permissions — redirect to onboarding if missing
-        if (!hasMinimumPermissions()) {
+        // Check minimum permissions OR onboarding not completed — redirect to onboarding
+        if (!hasMinimumPermissions() || !prefs.getBoolean("onboarding_complete", false)) {
             startActivity(Intent(this, OnboardingActivity::class.java))
             finish()
             return

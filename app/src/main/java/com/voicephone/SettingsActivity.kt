@@ -60,6 +60,18 @@ class SettingsActivity : AppCompatActivity() {
             openDefaultHomeSettings()
         }
 
+        findViewById<Button>(R.id.btnResetApp).setOnClickListener {
+            // Clear all preferences — triggers onboarding on next launch
+            getSharedPreferences("voicephone_prefs", MODE_PRIVATE).edit().clear().apply()
+            // Delete TTS cache files
+            filesDir.listFiles { f -> f.name.startsWith("tts_cache_") }?.forEach { it.delete() }
+            // Restart to onboarding
+            VoiceService.instance?.let { stopService(Intent(this, VoiceService::class.java)) }
+            startActivity(Intent(this, OnboardingActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            })
+        }
+
         btnDone.setOnClickListener { finish() }
     }
 

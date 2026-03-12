@@ -135,6 +135,17 @@
             android:layout_marginBottom="32dp" />
 
         <Button
+            android:id="@+id/btnResetApp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Reset to Default / Re-run Setup"
+            android:textSize="16sp"
+            android:padding="14dp"
+            android:backgroundTint="#8B0000"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="12dp" />
+
+        <Button
             android:id="@+id/btnDone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
